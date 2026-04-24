@@ -130,6 +130,16 @@ export function createGameService(eventBus) {
     //   - Iterate from the end down to index 1.
     //   - Swap each element with a random earlier element (inclusive).
     //   - Return the shuffled clone.
+    const clone = [...arr];
+
+    for (let i = clone.length - 1; i > 0; i--) {
+       const j = Math.floor(Math.random() * (i + 1));
+       let temp = clone[i];
+       clone[i] = clone[j];
+       clone[j] = temp;
+     }
+
+     return clone;
 
   }
 
@@ -144,6 +154,16 @@ export function createGameService(eventBus) {
     //   - Map each entry to a Card object: { id, symbol, isFlipped, isMatched }.
     //   - `id` is the card's index in the final shuffled array.
     //   - Return the resulting array.
+    const doubled = [...SYMBOLS, ...SYMBOLS];
+
+    const shuffled = shuffle(doubled);
+
+    return shuffled.map((symbol, index) => ({
+      id: index,
+      symbol: symbol,
+      isFlipped: false,
+      isMatched: false
+    }));
 
   }
 
@@ -153,7 +173,7 @@ export function createGameService(eventBus) {
    */
   function getCardById(id) {
     // TODO (3): find and return the card with matching id, or undefined.
-
+    return state.cards.find(card => card.id === id);
   }
 
   // -------------------------------------------------------------------------
@@ -167,12 +187,22 @@ export function createGameService(eventBus) {
     //       * increments state.elapsedSeconds
     //       * emits 'game:timerTick' with { elapsedSeconds }
     //   - Store the interval id in state.timerId.
+    if (state.timerId !== null) return;
+
+    state.timerId = setInterval(() => {
+      state.elapsedSeconds += 1;
+      eventBus.emit('game:timerTick', { elapsedSeconds: state.elapsedSeconds });
+    }, TIMER_INTERVAL_MS);
 
   }
 
   function stopTimer() {
     // TODO (5):
     //   - If state.timerId is not null, clearInterval and set timerId = null.
+    if (state.timerId !== null) {
+      clearInterval(state.timerId);
+      state.timerId = null;
+    }
 
   }
 
@@ -195,6 +225,18 @@ export function createGameService(eventBus) {
     //
     // IMPORTANT: emit 'game:started' BEFORE starting the timer, so the UI
     // has the board on-screen before the first tick arrives.
+    stopTimer();
+
+    state = createInitialState();
+    state.cards = buildDeck();
+    state.status = 'playing';
+
+    eventBus.emit('game:started', {
+      cards: state.cards,
+      totalPairs: TOTAL_PAIRS
+    });
+
+    startTimer();
 
   }
 
@@ -251,6 +293,80 @@ export function createGameService(eventBus) {
     //             'game:matchFailed' directly. Do not emit anything
     //             new from inside this timeout.
 
+    if (state.status !== 'playing') return
+    if (state.isLocked) return
+
+    const card = getCardById(cardId)
+    if (!card) return
+    if (card.isFlipped || card.isMatched) return
+    if (state.secondPickId !== null) return
+
+    // STEP B — flip
+    card.isFlipped = true
+    eventBus.emit('game:cardFlipped', { cardId, symbol: card.symbol })
+
+    // STEP C
+    if (state.firstPickId === null) {
+      state.firstPickId = cardId
+      return
+    }
+
+    // second pick
+    state.secondPickId = cardId
+    state.moves += 1
+    eventBus.emit('game:moveCountChanged', { moves: state.moves })
+
+    const firstCard = getCardById(state.firstPickId)
+    const secondCard = getCardById(state.secondPickId)
+
+    if (firstCard.symbol === secondCard.symbol) {
+      // match
+      firstCard.isMatched = true
+      secondCard.isMatched = true
+
+      state.matchedCount += 2
+
+      eventBus.emit('game:matchFound', {
+        firstId: firstCard.id,
+        secondId: secondCard.id,
+        matchedCount: state.matchedCount
+      });
+
+      state.firstPickId = null
+      state.secondPickId = null
+
+      if (state.matchedCount === TOTAL_CARDS) {
+        state.status = 'won'
+        stopTimer();
+        eventBus.emit('game:won', {
+          moves: state.moves,
+          elapsedSeconds: state.elapsedSeconds
+        });
+      }
+    } else {
+      state.isLocked = true
+
+      const firstId = state.firstPickId
+      const secondId = state.secondPickId
+
+      eventBus.emit('game:matchFailed', {
+        firstId,
+        secondId
+      });
+
+      setTimeout(() => {
+         const first = getCardById(firstId)
+         const second = getCardById(secondId)
+
+         if (first) first.isFlipped = false
+         if (second) second.isFlipped = false
+
+         state.firstPickId = null
+         state.secondPickId = null
+         state.isLocked = false
+      }, FLIP_BACK_DELAY_MS)
+    }
+
   }
 
   /**
@@ -260,7 +376,7 @@ export function createGameService(eventBus) {
    */
   function restart() {
     // TODO (8): call start(). That's it.
-
+    start()
   }
 
   /**
