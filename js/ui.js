@@ -94,6 +94,29 @@ export function createUI(eventBus, gameService, rootEl) {
     //   - Build the nested .card-inner, .card-back, .card-front, <span>.
     //   - Set the span's textContent to card.symbol.
     //   - Return the button element.
+    const button = document.createElement("button")
+    button.className = "card"
+    button.type = "button"
+    button.dataset.cardId = card.id
+
+    const inner = document.createElement("div")
+    inner.className = "card-inner"
+
+    const back = document.createElement("div")
+    back.className = "card-face card-back"
+
+    const front = document.createElement("div")
+    front.className = "card-face card-front"
+
+    const span = document.createElement("span")
+    span.textContent = card.symbol
+
+    front.appendChild(span)
+    inner.appendChild(back)
+    inner.appendChild(front)
+    button.appendChild(inner)
+
+  return button
 
   }
 
@@ -107,6 +130,16 @@ export function createUI(eventBus, gameService, rootEl) {
     //   - For each card, build its element and append.
     //   - For performance, build into a DocumentFragment first, then
     //     append the fragment once.
+    els.board.replaceChildren()
+
+    const frag = document.createDocumentFragment()
+
+    cards.forEach((card) => {
+      const el = buildCardElement(card)
+      frag.appendChild(el)
+    })
+
+    els.board.appendChild(frag)
 
   }
 
@@ -118,23 +151,27 @@ export function createUI(eventBus, gameService, rootEl) {
     //   - Set moves display to "0".
     //   - Set timer display to "0:00".
     //   - Set matched display to `0 / ${totalPairs}`.
-
+    els.moves.textContent = "0"
+    els.timer.textContent = "0:00"
+    els.matched.textContent = `0 / ${totalPairs}`
   }
 
   function updateMoves(moves) {
     // TODO (4): set els.moves.textContent to moves (coerced to string).
-
+    els.moves.textContent = String(moves)
   }
 
   function updateTimer(elapsedSeconds) {
     // TODO (5): set els.timer.textContent using formatTime(elapsedSeconds).
-
+    els.timer.textContent = formatTime(elapsedSeconds)
   }
 
   function updateMatchedCount(matchedCardCount) {
     // TODO (6):
     //   - matchedCardCount is CARDS matched, not pairs. Divide by 2.
     //   - Set els.matched.textContent to `${pairs} / ${TOTAL_PAIRS}`.
+    const pairs = matchedCardCount / 2
+    els.matched.textContent = `${pairs} / ${TOTAL_PAIRS}`
 
   }
 
@@ -146,7 +183,10 @@ export function createUI(eventBus, gameService, rootEl) {
     //   - Query els.board for `[data-card-id="${cardId}"]`.
     //   - If found, add the 'is-flipped' class.
     //   - Guard against missing nodes (don't throw if the element is gone).
+    const el = els.board.querySelector(`[data-card-id="${cardId}"]`)
+    if(!el) return
 
+    el.classList.add("is-flipped")
   }
 
   /**
@@ -156,6 +196,15 @@ export function createUI(eventBus, gameService, rootEl) {
   function markCardsMatched(firstId, secondId) {
     // TODO (8): add 'is-matched' class to both cards' elements.
     //           (They already have 'is-flipped' from the earlier event.)
+    const first = els.board.querySelector(`[data-card-id="${firstId}"]`)
+    const second = els.board.querySelector(`[data-card-id="${secondId}"]`)
+
+    if(first) {
+      first.classList.add("is-matched") 
+    }
+    if(second) {
+      second.classList.add("is-matched")
+    }
 
   }
 
@@ -165,8 +214,18 @@ export function createUI(eventBus, gameService, rootEl) {
    */
   function flipCardsFaceDown(firstId, secondId) {
     // TODO (9): remove 'is-flipped' from both card elements.
+    const first = els.board.querySelector(`[data-card-id="${firstId}"]`)
+    const second = els.board.querySelector(`[data-card-id="${secondId}"]`)
 
+    if(first) {
+      first.classList.remove("is-flipped")
+    }
+    if(second) {
+       second.classList.remove("is-flipped")
+    }
+  
   }
+  
 
   function showWinOverlay(moves, elapsedSeconds) {
     // TODO (10):
@@ -174,14 +233,18 @@ export function createUI(eventBus, gameService, rootEl) {
     //   - Set els.winTime.textContent to formatTime(elapsedSeconds).
     //   - Add 'is-visible' class to els.winOverlay.
     //   - Set aria-hidden="false" on els.winOverlay.
-
+    els.winMoves.textContent = String(moves)
+    els.winTime.textContent = formatTime(elapsedSeconds)
+    els.winOverlay.classList.add('is-visible')
+    els.winOverlay.setAttribute("aria-hidden", "false")
   }
 
   function hideWinOverlay() {
     // TODO (11):
     //   - Remove 'is-visible' class from els.winOverlay.
     //   - Set aria-hidden="true" on els.winOverlay.
-
+    els.winOverlay.classList.remove('is-visible')
+    els.winOverlay.setAttribute("aria-hidden", "true")
   }
 
   // -------------------------------------------------------------------------
@@ -201,11 +264,16 @@ export function createUI(eventBus, gameService, rootEl) {
     //
     //   DO NOT check any game rules here. The service decides whether
     //   a flip is valid. The UI just forwards the intent.
+    const card = domEvent.target.closest('.card')
+    if (!card) return
 
+    const id = Number(card.dataset.cardId)
+    gameService.flipCard(id)
   }
 
   function onRestartClick() {
     // TODO (13): call gameService.restart().
+    gameService.restart()
 
   }
 
@@ -232,6 +300,39 @@ export function createUI(eventBus, gameService, rootEl) {
     //
     //   For 'game:matchFailed', remember to setTimeout the flip-back
     //   by FLIP_BACK_DELAY_MS before calling flipCardsFaceDown.
+
+    subscribe('game:started', ({ cards, totalPairs }) => {
+      renderBoard(cards)
+      resetHud(totalPairs)
+      hideWinOverlay()
+    })
+
+    subscribe('game:cardFlipped', ({ cardId }) => {
+      flipCardFaceUp(cardId)
+    })
+
+    subscribe('game:matchFound', ({ firstId, secondId, matchedCount }) => {
+      markCardsMatched(firstId, secondId)
+      updateMatchedCount(matchedCount)
+    })
+
+    subscribe('game:matchFailed', ({ firstId, secondId }) => {
+      setTimeout(() => {
+        flipCardsFaceDown(firstId, secondId)
+      }, FLIP_BACK_DELAY_MS)
+    })
+
+    subscribe('game:moveCountChanged', ({ moves }) => {
+      updateMoves(moves)
+    })
+
+    subscribe('game:timerTick', ({ elapsedSeconds }) => {
+      updateTimer(elapsedSeconds)
+    })
+
+    subscribe('game:won', ({ moves, elapsedSeconds }) => {
+      showWinOverlay(moves, elapsedSeconds)
+    })
 
   }
 
