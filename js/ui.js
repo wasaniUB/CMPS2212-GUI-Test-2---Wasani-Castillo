@@ -158,12 +158,16 @@ export function createUI(eventBus, gameService, rootEl) {
 
   function updateMoves(moves) {
     // TODO (4): set els.moves.textContent to moves (coerced to string).
-    els.moves.textContent = String(moves)
+    if (els.moves){
+       els.moves.textContent = String(moves)
+    }
   }
 
   function updateTimer(elapsedSeconds) {
     // TODO (5): set els.timer.textContent using formatTime(elapsedSeconds).
+    if (els.timer) {
     els.timer.textContent = formatTime(elapsedSeconds)
+    }
   }
 
   function updateMatchedCount(matchedCardCount) {
@@ -171,8 +175,10 @@ export function createUI(eventBus, gameService, rootEl) {
     //   - matchedCardCount is CARDS matched, not pairs. Divide by 2.
     //   - Set els.matched.textContent to `${pairs} / ${TOTAL_PAIRS}`.
     const pairs = matchedCardCount / 2
-    els.matched.textContent = `${pairs} / ${TOTAL_PAIRS}`
 
+    if (els.matched) {
+       els.matched.textContent = `${pairs} / ${TOTAL_PAIRS}`
+    }
   }
 
   /**
@@ -243,8 +249,13 @@ export function createUI(eventBus, gameService, rootEl) {
     // TODO (11):
     //   - Remove 'is-visible' class from els.winOverlay.
     //   - Set aria-hidden="true" on els.winOverlay.
-    els.winOverlay.classList.remove('is-visible')
-    els.winOverlay.setAttribute("aria-hidden", "true")
+    if(!els.winOverlay) return
+    
+    if (els.winOverlay) {
+       els.winOverlay.classList.remove('is-visible')
+       els.winOverlay.setAttribute("aria-hidden", "true")
+    }
+    
   }
 
   // -------------------------------------------------------------------------
