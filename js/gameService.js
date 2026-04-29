@@ -133,6 +133,7 @@ export function createGameService(eventBus) {
       totalPairs: TOTAL_PAIRS
     });
 
+    eventBus.emit('game:moveCountChanged', { moves: state.moves })
     startTimer();
 
   }
